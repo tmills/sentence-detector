@@ -19,5 +19,13 @@
   		<groupId>org.cleartk</groupId>
   		<artifactId>cleartk-eval</artifactId>
   	</dependency>
+  	<dependency>
+  		<groupId>com.lexicalscope.jewelcli</groupId>
+  		<artifactId>jewelcli</artifactId>
+  	</dependency>
+  	<dependency>
+  		<groupId>org.cleartk</groupId>
+  		<artifactId>cleartk-ml-liblinear</artifactId>
+  	</dependency>
   </dependencies>
 </project>
