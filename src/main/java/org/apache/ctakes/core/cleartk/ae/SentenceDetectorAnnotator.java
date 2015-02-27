@@ -9,6 +9,7 @@ import org.apache.ctakes.typesystem.type.textspan.Sentence;
 import org.apache.log4j.Logger;
 import org.apache.uima.analysis_engine.AnalysisEngineDescription;
 import org.apache.uima.analysis_engine.AnalysisEngineProcessException;
+import org.apache.uima.cas.CASRuntimeException;
 import org.apache.uima.fit.factory.AnalysisEngineFactory;
 import org.apache.uima.fit.util.JCasUtil;
 import org.apache.uima.jcas.JCas;
@@ -28,8 +29,13 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
 
   @Override
   public void process(JCas jcas) throws AnalysisEngineProcessException {
-    String uri = ViewUriUtil.getURI(jcas).toString();
-    logger.info(String.format("Processing file with uri %s", uri));
+    try{
+      String uri = ViewUriUtil.getURI(jcas).toString();
+      logger.info(String.format("Processing file with uri %s", uri));
+    }catch(CASRuntimeException e){
+      logger.debug("No uri found, probably not a big deal unless this is an evaluation.");
+    }
+    
     for(Segment seg : JCasUtil.select(jcas, Segment.class)){
       // keep track of next sentence during training
       List<Sentence> sents = JCasUtil.selectCovered(jcas, Sentence.class, seg);
@@ -37,21 +43,27 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
       Sentence nextSent = sents.size() > 0 ? sents.get(sentInd++) : null;
       int startInd=0;
       
-      String prevOutcome = "<BEGIN>";
+      String prevOutcome = "O";
       String segText = seg.getCoveredText();
       for(int ind = 0; ind < segText.length(); ind++){
         List<Feature> feats = new ArrayList<>();
         
         feats.add(new Feature("PrevOutcome", prevOutcome));
         feats.add(new Feature("Character", segText.charAt(ind)));
+        for(int window = -3; window <= 3; window++){
+          if(ind+window >= 0 && ind+window < segText.length()){
+            feats.add(new Feature("CharOffset_"+window, segText.charAt(ind+window)));
+          }
+        }
         
         String outcome;
+        int casInd = seg.getBegin() + ind;
         if(this.isTraining()){
           // if ind pointer has passed nextSent pointer advance nextSent
-          while(nextSent.getEnd() < ind && sentInd < sents.size()){
+          while(nextSent.getEnd() < casInd && sentInd < sents.size()){
             nextSent = sents.get(sentInd++);
           }
-          if(ind < nextSent.getBegin()){
+          if(casInd < nextSent.getBegin()){
             // current index is prior to next sentence
             outcome = "O";
           }else if(prevOutcome.equals("O")){
@@ -64,16 +76,27 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
           this.dataWriter.write(new Instance<String>(outcome, feats));
         }else{
           outcome = this.classifier.classify(feats);
-          if(outcome.equals("B")) startInd = ind;
+          if(outcome.equals("B")) startInd = casInd;
           else if(outcome.equals("O") && 
               (prevOutcome.equals("I") || prevOutcome.equals("B"))){
             // just ended a sentence
-            int endInd = ind-1;
-            Sentence sent = new Sentence(jcas, startInd, endInd);
-            sent.addToIndexes();            
+            int endInd = casInd-1;
+            while(endInd > startInd && Character.isWhitespace(segText.charAt(endInd-seg.getBegin()))){
+              endInd--;
+            }
+            
+            if(endInd > startInd){
+              Sentence sent = new Sentence(jcas, startInd, endInd);
+              sent.addToIndexes();    
+            }
           }
         }
         prevOutcome = outcome;
+      }
+      if(!this.isTraining() && !prevOutcome.equals("O")){
+        // segment ended with a sentence
+        Sentence sent = new Sentence(jcas, startInd, seg.getEnd());
+        sent.addToIndexes();
       }
     }
   }

@@ -61,6 +61,8 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
       System.out.println("Fold: " );
       System.out.println(stat);
     }
+    
+    eval.train(eval.getCollectionReader(items), new File("target/eval/train_and_test"));
   }
 
   public SentenceDetectorEvaluation(File baseDirectory) {
