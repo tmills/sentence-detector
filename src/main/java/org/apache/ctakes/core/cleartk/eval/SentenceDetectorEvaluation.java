@@ -46,6 +46,9 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
   static interface Options {
     @Option
     public File getAnaforaDirectory();
+    
+    @Option(shortName = "-b")
+    public boolean getBuildModel();
   }
   
   public static final String GOLD_VIEW_NAME = "GoldView";
@@ -58,11 +61,13 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
     List<File> items = getItems(options.getAnaforaDirectory());
     List<AnnotationStatistics<String>> stats = eval.crossValidation(items, 5);
     for(AnnotationStatistics<String> stat : stats){
-      System.out.println("Fold: " );
+//      System.out.println("Fold: " );
       System.out.println(stat);
     }
     
-    eval.train(eval.getCollectionReader(items), new File("target/eval/train_and_test"));
+    if(options.getBuildModel()){
+      eval.train(eval.getCollectionReader(items), new File("target/eval/train_and_test"));
+    }
   }
 
   public SentenceDetectorEvaluation(File baseDirectory) {
