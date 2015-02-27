@@ -19,6 +19,7 @@ import org.cleartk.ml.Feature;
 import org.cleartk.ml.Instance;
 import org.cleartk.ml.jar.DefaultDataWriterFactory;
 import org.cleartk.ml.jar.DirectoryDataWriterFactory;
+import org.cleartk.ml.jar.GenericJarClassifierFactory;
 import org.cleartk.util.ViewUriUtil;
 
 public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
@@ -86,6 +87,15 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
         outputDirectory,
         DefaultDataWriterFactory.PARAM_DATA_WRITER_CLASS_NAME,
         class1);
+  }
+
+  public static AnalysisEngineDescription getDescription(String modelPath) throws ResourceInitializationException {
+    return AnalysisEngineFactory.createEngineDescription(
+        SentenceDetectorAnnotator.class,
+        SentenceDetectorAnnotator.PARAM_IS_TRAINING,
+        false,
+        GenericJarClassifierFactory.PARAM_CLASSIFIER_JAR_PATH,
+        modelPath);
   }
 }
 
