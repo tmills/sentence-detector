@@ -11,7 +11,7 @@ import org.xml.sax.SAXException;
 
 public class GenerateDescriptors {
 
-  public static final String modelPath = "target/eval/train_and_test/model.jar";
+  public static final String modelPath = "/org/apache/ctakes/core/sentdetect/model.jar";
   
   public static void main(String[] args) throws ResourceInitializationException, SAXException, IOException {
     AggregateBuilder aggregateBuilder = new AggregateBuilder();

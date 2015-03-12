@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Scanner;
 
+import org.apache.ctakes.core.resource.FileLocator;
 import org.apache.ctakes.typesystem.type.textspan.Segment;
 import org.apache.ctakes.typesystem.type.textspan.Sentence;
 import org.apache.ctakes.utils.struct.CounterMap;
@@ -57,7 +58,7 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
       throws ResourceInitializationException {
     super.initialize(context);
     try{
-      Scanner scanner = new Scanner(new File(tokenCountFile));
+      Scanner scanner = new Scanner(FileLocator.getAsStream(tokenCountFile));
       while(scanner.hasNextLine()){
         String[] pair = scanner.nextLine().trim().split(" : ");
         if(pair.length == 2){
@@ -80,7 +81,9 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
       logger.debug("No uri found, probably not a big deal unless this is an evaluation.");
     }
     
-    buildDocEndlineModel(jcas);
+    if(featConfig == FEAT_CONFIG.LINE_POS || featConfig == FEAT_CONFIG.CHAR_POS || featConfig == FEAT_CONFIG.CHAR_SHAPE_POS){
+      buildDocEndlineModel(jcas);
+    }
     
     for(Segment seg : JCasUtil.select(jcas, Segment.class)){
       // keep track of next sentence during training
