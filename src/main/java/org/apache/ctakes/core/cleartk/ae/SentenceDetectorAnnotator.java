@@ -45,7 +45,7 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
   
   public static final String PARAM_TOKEN_FILE = "TokenFilename";
   @ConfigurationParameter(name=PARAM_TOKEN_FILE,mandatory=false)
-  private String tokenCountFile = "resources/tokenCounts.txt";
+  private String tokenCountFile = "org/apache/ctakes/core/sentdetect/tokenCounts.txt";
   CounterMap<String> tokenCounts = new CounterMap<>();
 
   private HashMap<Integer,Double> endCounts = null;
