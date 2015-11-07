@@ -13,6 +13,7 @@ import org.apache.ctakes.core.ae.DocumentIdPrinterAnalysisEngine;
 import org.apache.ctakes.core.ae.SentenceDetector;
 import org.apache.ctakes.core.cleartk.ae.AnaforaSentenceXmlReader;
 import org.apache.ctakes.core.cleartk.ae.SentenceDetectorAnnotator;
+import org.apache.ctakes.rnn.RnnSentenceDetector;
 import org.apache.ctakes.typesystem.type.textspan.Segment;
 import org.apache.ctakes.typesystem.type.textspan.Sentence;
 import org.apache.log4j.Level;
@@ -53,12 +54,12 @@ import com.lexicalscope.jewel.cli.Option;
 
 public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, AnnotationStatistics<String>> {
 
-  enum EVAL_TYPE {BASELINE, GILLICK, CHAR, SHAPE, LINE_POS, CHAR_SHAPE, CHAR_POS, CHAR_SHAPE_POS}
+  enum EVAL_TYPE {BASELINE, GILLICK, CHAR, SHAPE, LINE_POS, CHAR_SHAPE, CHAR_POS, CHAR_SHAPE_POS, RNN}
   
   static interface Options {
     @Option
     public File getAnaforaDirectory();
-    
+
     @Option(shortName = "-b")
     public boolean getBuildModel();
     
@@ -76,8 +77,8 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
     
     List<File> items = getItems(options.getAnaforaDirectory());
     eval.evalType = options.getEvalType();
-    logger.setLevel(Level.DEBUG);
-    if(eval.evalType == EVAL_TYPE.BASELINE) logger.setLevel(Level.WARN);
+    logger.setLevel(Level.INFO);
+    if(eval.evalType == EVAL_TYPE.BASELINE) logger.setLevel(Level.INFO);
 
     List<AnnotationStatistics<String>> stats = eval.crossValidation(items, 5);
     double p,r,f;
@@ -120,18 +121,24 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
     AggregateBuilder aggregateBuilder = new AggregateBuilder();
     aggregateBuilder.add(UriToDocumentTextAnnotator.getDescription());
     aggregateBuilder.add(AnaforaSentenceXmlReader.getDescription());
-    AnalysisEngineDescription aed = SentenceDetectorAnnotator.getDataWriter(directory,
-        LibLinearStringOutcomeDataWriter.class);
-    addParameter(aed);
-
+    AnalysisEngineDescription aed = null;
+    
+    if(evalType == EVAL_TYPE.RNN){
+      aed = RnnSentenceDetector.getDataWriter(directory, LibLinearStringOutcomeDataWriter.class);
+    }else{
+      aed = SentenceDetectorAnnotator.getDataWriter(directory,
+      LibLinearStringOutcomeDataWriter.class);
+      addParameter(aed);
+    }
+    
     aggregateBuilder.add(aed);
     Logger.getLogger(SentenceDetectorAnnotator.class).setLevel(Level.INFO);
     SimplePipeline.runPipeline(collectionReader, aggregateBuilder.createAggregate());
     
     
-    HideOutput hider = new HideOutput();
+//    HideOutput hider = new HideOutput();
     JarClassifierBuilder.trainAndPackage(directory, new String[]{"-c", "0.1"});
-    hider.restoreOutput();
+//    hider.restoreOutput();
   }
 
   private void addParameter(AnalysisEngineDescription aed){
@@ -180,6 +187,8 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
     if(evalType == EVAL_TYPE.BASELINE){
       aggregateBuilder.add(SentenceDetector.createAnnotatorDescription());
       Logger.getLogger(SentenceDetector.class).setLevel(Level.WARN);
+    }else if(evalType == EVAL_TYPE.RNN){
+      aggregateBuilder.add(RnnSentenceDetector.getDescription(directory.getAbsolutePath() + File.separator + "model.jar"));
     }else{
       AnalysisEngineDescription aed =  SentenceDetectorAnnotator.getDescription(directory.getAbsolutePath() + File.separator + "model.jar");
       addParameter(aed);
@@ -197,6 +206,7 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
           }
         });
     
+    long start = System.currentTimeMillis();
     for (Iterator<JCas> casIter = new JCasIterator(collectionReader, aggregateBuilder.createAggregate()); casIter.hasNext();) {
       JCas jCas = casIter.next();
       JCas goldView = jCas.getView(GOLD_VIEW_NAME);
@@ -253,6 +263,8 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
 
       }
     }
+    long end = System.currentTimeMillis();
+    logger.info("Runtime of test() for this system is: " + (end-start) + "ms");
     
     return stats;
   }

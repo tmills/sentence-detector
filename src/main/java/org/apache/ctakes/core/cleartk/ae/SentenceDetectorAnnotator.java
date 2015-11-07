@@ -215,7 +215,7 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
     }
   }
 
-  private static void makeSentence(JCas jcas, int begin, int end){
+  public static void makeSentence(JCas jcas, int begin, int end){
     String docText = jcas.getDocumentText();
     while(begin < docText.length() && Character.isWhitespace(docText.charAt(begin))){
       begin++;
