@@ -60,10 +60,10 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
     @Option
     public File getAnaforaDirectory();
 
-    @Option(shortName = "-b")
+    @Option(shortName = "b")
     public boolean getBuildModel();
     
-    @Option(shortName = "-c")
+    @Option(shortName = "c")
     public EVAL_TYPE getEvalType();
   }
   
