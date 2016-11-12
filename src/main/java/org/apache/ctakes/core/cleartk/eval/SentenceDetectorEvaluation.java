@@ -195,7 +195,7 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
       aggregateBuilder.add(aed);
       Logger.getLogger(SentenceDetectorAnnotator.class).setLevel(Level.INFO);
     }
-    aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(SentenceBoundaryAdjuster.class));
+//    aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(SentenceBoundaryAdjuster.class));
     
     AnnotationStatistics<String> stats = new AnnotationStatistics<>();
     Ordering<Annotation> bySpans = Ordering.<Integer> natural().lexicographical().onResultOf(
