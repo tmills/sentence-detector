@@ -92,6 +92,7 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
       Sentence nextSent = sents.size() > 0 ? sents.get(sentInd++) : null;
       int startInd=0;
       
+      // Iterate over every character in the Segment and classify it as Begin, Inside, or Outside a Sentence
       String prevOutcome = "O";
       String segText = seg.getCoveredText();
       for(int ind = 0; ind < segText.length(); ind++){
@@ -99,6 +100,7 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
         
         char curChar = segText.charAt(ind);
         
+        // Start collecting features:
         feats.add(new Feature("PrevOutcome", prevOutcome));
         
         // all systems get to know about the current char they're classifying (i.e. is this a period)
@@ -164,6 +166,7 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
         }
         prevOutcome = outcome;
       }
+      // One final sentence at the end of the segment if we were in the middle of one when we ran out of characters.
       if(!this.isTraining() && !prevOutcome.equals("O")){
         // segment ended with a sentence
         makeSentence(jcas, startInd, seg.getEnd());
@@ -215,6 +218,7 @@ public class SentenceDetectorAnnotator extends CleartkAnnotator<String>{
     }
   }
 
+  // Create UIMA annotation after cleaning up begin and end of sentence.
   public static void makeSentence(JCas jcas, int begin, int end){
     String docText = jcas.getDocumentText();
     while(begin < docText.length() && Character.isWhitespace(docText.charAt(begin))){

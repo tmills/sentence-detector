@@ -107,11 +107,11 @@ public class TrainMimicRnn {
    * @param net MultiLayerNetwork with one or more GravesLSTM/RNN layers and a softmax output layer
    * @param iter CharacterIterator. Used for going from indexes back to characters
    */
-  private static String[] sampleCharactersFromNetwork( String initialization, MultiLayerNetwork net,
-      LuceneReaderCharacterIterator iter, Random rng, int charactersToSample, int numSamples ){
+  public static String[] sampleCharactersFromNetwork( String initialization, MultiLayerNetwork net,
+      CharacterIterator_ImplBase iter, Random rng, int charactersToSample, int numSamples ){
     //Set up initialization. If no initialization: use a random character
     if( initialization == null ){
-      initialization = String.valueOf(iter.getRandomCharacter());
+      initialization = String.valueOf(iter.getRandomCharacter(rng));
     }
     
     //Create input for initialization

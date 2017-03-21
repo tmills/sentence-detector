@@ -57,7 +57,7 @@ public class RnnSentenceDetector extends CleartkAnnotator<String>{
       throw new ResourceInitializationException(e);
     }
     charToIndexMap = new HashMap<>();
-    char[] validChars = LuceneReaderCharacterIterator.getMimicCharacterSet();
+    char[] validChars = new LuceneReaderCharacterIterator().getCharacterSet();
     for( int i=0; i<validChars.length; i++ ) charToIndexMap.put(validChars[i], i);
     inputSize = validChars.length;
   }

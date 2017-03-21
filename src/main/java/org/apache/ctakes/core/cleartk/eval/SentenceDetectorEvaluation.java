@@ -9,10 +9,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.apache.ctakes.core.ae.DocumentIdPrinterAnalysisEngine;
 import org.apache.ctakes.core.ae.SentenceDetector;
 import org.apache.ctakes.core.cleartk.ae.AnaforaSentenceXmlReader;
 import org.apache.ctakes.core.cleartk.ae.SentenceDetectorAnnotator;
+import org.apache.ctakes.core.cleartk.ae.WsjSentenceReader;
 import org.apache.ctakes.rnn.RnnSentenceDetector;
 import org.apache.ctakes.typesystem.type.textspan.Segment;
 import org.apache.ctakes.typesystem.type.textspan.Sentence;
@@ -32,7 +32,6 @@ import org.apache.uima.fit.factory.AnalysisEngineFactory;
 import org.apache.uima.fit.factory.ConfigurationParameterFactory;
 import org.apache.uima.fit.pipeline.JCasIterator;
 import org.apache.uima.fit.pipeline.SimplePipeline;
-import org.apache.uima.fit.testing.util.HideOutput;
 import org.apache.uima.fit.util.JCasUtil;
 import org.apache.uima.jcas.JCas;
 import org.apache.uima.jcas.cas.TOP;
@@ -54,17 +53,25 @@ import com.lexicalscope.jewel.cli.Option;
 
 public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, AnnotationStatistics<String>> {
 
-  enum EVAL_TYPE {BASELINE, GILLICK, CHAR, SHAPE, LINE_POS, CHAR_SHAPE, CHAR_POS, CHAR_SHAPE_POS, RNN}
+  enum FEATURE_TYPE {BASELINE, GILLICK, CHAR, SHAPE, LINE_POS, CHAR_SHAPE, CHAR_POS, CHAR_SHAPE_POS, RNN}
+  enum CORPUS {MIMIC, WSJ}
+  enum EVAL_TYPE { CV, DEV, TEST }
   
   static interface Options {
-    @Option
-    public File getAnaforaDirectory();
+    @Option(shortName = "t")
+    public File getTrainInputPath();
 
+    @Option(shortName = "e", defaultToNull=true)
+    public File getTestInputPath();
+    
     @Option(shortName = "b")
     public boolean getBuildModel();
     
-    @Option(shortName = "c")
-    public EVAL_TYPE getEvalType();
+    @Option(shortName = "c", defaultValue={"MIMIC"})
+    public CORPUS getCorpus();
+    
+    @Option(shortName = "f")
+    public FEATURE_TYPE getFeatureType();    
   }
   
   public static final String GOLD_VIEW_NAME = "GoldView";
@@ -75,20 +82,43 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
     
     SentenceDetectorEvaluation eval = new SentenceDetectorEvaluation(new File("target/eval"));
     
-    List<File> items = getItems(options.getAnaforaDirectory());
-    eval.evalType = options.getEvalType();
+    List<File> trainItems = null;
+    List<File> testItems = null;
+    if(options.getCorpus() == CORPUS.MIMIC){
+      trainItems = getAnaforaItems(options.getTrainInputPath());
+      if(options.getTestInputPath() != null){
+        testItems = getAnaforaItems(options.getTestInputPath());
+      }
+    }else if(options.getCorpus() == CORPUS.WSJ){
+      trainItems = getWsjItems(options.getTrainInputPath());
+      if(options.getTestInputPath() != null){
+        testItems = getWsjItems(options.getTestInputPath());
+      }
+    }
+    
+    eval.evalType = options.getFeatureType();
+    eval.corpus = options.getCorpus();
+    
     logger.setLevel(Level.INFO);
-    if(eval.evalType == EVAL_TYPE.BASELINE) logger.setLevel(Level.INFO);
+    if(eval.evalType == FEATURE_TYPE.BASELINE) logger.setLevel(Level.INFO);
 
-    List<AnnotationStatistics<String>> stats = eval.crossValidation(items, 5);
     double p,r,f;
     int tp=0, precDenom=0, recDenom=0;
-    for(AnnotationStatistics<String> stat : stats){
-      //      System.out.println("Fold: " );
-      System.out.println(stat);
-      tp += stat.countCorrectOutcomes();
-      precDenom += stat.countPredictedOutcomes();
-      recDenom += stat.countReferenceOutcomes();
+    if(testItems == null){
+      List<AnnotationStatistics<String>> stats = eval.crossValidation(trainItems, 5);
+      for(AnnotationStatistics<String> stat : stats){
+        //      System.out.println("Fold: " );
+        System.out.println(stat);
+        tp += stat.countCorrectOutcomes();
+        precDenom += stat.countPredictedOutcomes();
+        recDenom += stat.countReferenceOutcomes();
+      }
+    }else{
+      AnnotationStatistics<String> stats = eval.trainAndTest(trainItems, testItems);
+      System.out.println(stats);
+      tp = stats.countCorrectOutcomes();
+      precDenom = stats.countPredictedOutcomes();
+      recDenom = stats.countReferenceOutcomes();
     }
     p = (double) tp / precDenom;
     r = (double) tp / recDenom;
@@ -98,11 +128,12 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
     logger.setLevel(Level.WARN);
     
     if(options.getBuildModel()){
-      eval.train(eval.getCollectionReader(items), new File("target/eval/train_and_test"));
+      eval.train(eval.getCollectionReader(trainItems), new File("target/eval/train_and_test"));
     }
   }
 
-  EVAL_TYPE evalType = EVAL_TYPE.BASELINE;
+  FEATURE_TYPE evalType = FEATURE_TYPE.BASELINE;
+  CORPUS corpus = CORPUS.MIMIC;
   
   public SentenceDetectorEvaluation(File baseDirectory) {
     super(baseDirectory);
@@ -117,13 +148,19 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
   @Override
   protected void train(CollectionReader collectionReader, File directory)
       throws Exception {
-    if(evalType == EVAL_TYPE.BASELINE) return;
+    if(evalType == FEATURE_TYPE.BASELINE) return;
     AggregateBuilder aggregateBuilder = new AggregateBuilder();
     aggregateBuilder.add(UriToDocumentTextAnnotator.getDescription());
-    aggregateBuilder.add(AnaforaSentenceXmlReader.getDescription());
+
+    if(corpus == CORPUS.MIMIC){
+      aggregateBuilder.add(AnaforaSentenceXmlReader.getDescription());
+    }else if(corpus == CORPUS.WSJ){
+      aggregateBuilder.add(WsjSentenceReader.getDescription());
+    }
+    
     AnalysisEngineDescription aed = null;
     
-    if(evalType == EVAL_TYPE.RNN){
+    if(evalType == FEATURE_TYPE.RNN){
       aed = RnnSentenceDetector.getDataWriter(directory, LibLinearStringOutcomeDataWriter.class);
     }else{
       aed = SentenceDetectorAnnotator.getDataWriter(directory,
@@ -137,36 +174,36 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
     
     
 //    HideOutput hider = new HideOutput();
-    JarClassifierBuilder.trainAndPackage(directory, new String[]{"-c", "0.1"});
+    JarClassifierBuilder.trainAndPackage(directory, new String[]{"-s", "2", "-c", "1.0"});
 //    hider.restoreOutput();
   }
 
   private void addParameter(AnalysisEngineDescription aed){
-    if(evalType == EVAL_TYPE.CHAR){
+    if(evalType == FEATURE_TYPE.CHAR){
       ConfigurationParameterFactory.addConfigurationParameter(aed, 
           SentenceDetectorAnnotator.PARAM_FEAT_CONFIG, 
           SentenceDetectorAnnotator.FEAT_CONFIG.CHAR);
-    }else if(evalType == EVAL_TYPE.CHAR_SHAPE_POS){
+    }else if(evalType == FEATURE_TYPE.CHAR_SHAPE_POS){
       ConfigurationParameterFactory.addConfigurationParameter(aed, 
           SentenceDetectorAnnotator.PARAM_FEAT_CONFIG, 
           SentenceDetectorAnnotator.FEAT_CONFIG.CHAR_SHAPE_POS);
-    }else if(evalType == EVAL_TYPE.GILLICK){      
+    }else if(evalType == FEATURE_TYPE.GILLICK){      
       ConfigurationParameterFactory.addConfigurationParameter(aed, 
           SentenceDetectorAnnotator.PARAM_FEAT_CONFIG, 
           SentenceDetectorAnnotator.FEAT_CONFIG.GILLICK);
-    }else if(evalType == EVAL_TYPE.SHAPE){
+    }else if(evalType == FEATURE_TYPE.SHAPE){
       ConfigurationParameterFactory.addConfigurationParameter(aed, 
           SentenceDetectorAnnotator.PARAM_FEAT_CONFIG, 
           SentenceDetectorAnnotator.FEAT_CONFIG.SHAPE);      
-    }else if(evalType == EVAL_TYPE.LINE_POS){
+    }else if(evalType == FEATURE_TYPE.LINE_POS){
       ConfigurationParameterFactory.addConfigurationParameter(aed, 
           SentenceDetectorAnnotator.PARAM_FEAT_CONFIG, 
           SentenceDetectorAnnotator.FEAT_CONFIG.LINE_POS);            
-    }else if(evalType == EVAL_TYPE.CHAR_SHAPE){
+    }else if(evalType == FEATURE_TYPE.CHAR_SHAPE){
       ConfigurationParameterFactory.addConfigurationParameter(aed, 
           SentenceDetectorAnnotator.PARAM_FEAT_CONFIG, 
           SentenceDetectorAnnotator.FEAT_CONFIG.CHAR_SHAPE);            
-    }else if(evalType == EVAL_TYPE.CHAR_POS){
+    }else if(evalType == FEATURE_TYPE.CHAR_POS){
       ConfigurationParameterFactory.addConfigurationParameter(aed, 
           SentenceDetectorAnnotator.PARAM_FEAT_CONFIG, 
           SentenceDetectorAnnotator.FEAT_CONFIG.CHAR_POS);            
@@ -182,12 +219,16 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
         ViewCreatorAnnotator.PARAM_VIEW_NAME,
         GOLD_VIEW_NAME));
     aggregateBuilder.add(UriToDocumentTextAnnotator.getDescription());
-    aggregateBuilder.add(AnaforaSentenceXmlReader.getDescription(),CAS.NAME_DEFAULT_SOFA, GOLD_VIEW_NAME);
+    if(corpus == CORPUS.MIMIC){
+      aggregateBuilder.add(AnaforaSentenceXmlReader.getDescription(),CAS.NAME_DEFAULT_SOFA, GOLD_VIEW_NAME);
+    }else if(corpus == CORPUS.WSJ){
+      aggregateBuilder.add(WsjSentenceReader.getDescription(), CAS.NAME_DEFAULT_SOFA, GOLD_VIEW_NAME);
+    }
     aggregateBuilder.add(CopyFromGold.getDescription(Segment.class));
-    if(evalType == EVAL_TYPE.BASELINE){
+    if(evalType == FEATURE_TYPE.BASELINE){
       aggregateBuilder.add(SentenceDetector.createAnnotatorDescription());
       Logger.getLogger(SentenceDetector.class).setLevel(Level.WARN);
-    }else if(evalType == EVAL_TYPE.RNN){
+    }else if(evalType == FEATURE_TYPE.RNN){
       aggregateBuilder.add(RnnSentenceDetector.getDescription(directory.getAbsolutePath() + File.separator + "model.jar"));
     }else{
       AnalysisEngineDescription aed =  SentenceDetectorAnnotator.getDescription(directory.getAbsolutePath() + File.separator + "model.jar");
@@ -195,7 +236,7 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
       aggregateBuilder.add(aed);
       Logger.getLogger(SentenceDetectorAnnotator.class).setLevel(Level.INFO);
     }
-//    aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(SentenceBoundaryAdjuster.class));
+    aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(SentenceBoundaryAdjuster.class));
     
     AnnotationStatistics<String> stats = new AnnotationStatistics<>();
     Ordering<Annotation> bySpans = Ordering.<Integer> natural().lexicographical().onResultOf(
@@ -269,7 +310,7 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
     return stats;
   }
 
-  public static List<File> getItems(File anaforaDirectory){
+  public static List<File> getAnaforaItems(File anaforaDirectory){
     List<File> textFiles = new ArrayList<>();
     for(File subDir : anaforaDirectory.listFiles()){
       File[] anaFiles = subDir.listFiles();
@@ -278,6 +319,16 @@ public class SentenceDetectorEvaluation extends Evaluation_ImplBase<File, Annota
           textFiles.add(new File(subDir, subDir.getName()));
           break;
         }
+      }
+    }
+    return textFiles;
+  }
+  
+  public static List<File> getWsjItems(File wsjFile){
+    List<File> textFiles = new ArrayList<>();
+    for(File txtFile : wsjFile.listFiles()){
+      if(txtFile.getName().endsWith("raw.txt")){
+        textFiles.add(txtFile);
       }
     }
     return textFiles;

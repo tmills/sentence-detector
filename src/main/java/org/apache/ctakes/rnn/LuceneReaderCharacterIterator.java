@@ -19,29 +19,30 @@ import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.DataSetPreProcessor;
 import org.nd4j.linalg.factory.Nd4j;
 
-public class LuceneReaderCharacterIterator implements DataSetIterator {
+public class LuceneReaderCharacterIterator extends CharacterIterator_ImplBase {
 
   /**
    * 
    */
   private static final long serialVersionUID = 1L;
   
-  public static final int MINI_BATCH_SIZE = 50;
-  public static final int EXAMPLE_SIZE = 100;
   public static final String textFieldName = "content";
   
   private DirectoryReader ireader = null;
-  private int charNum = 0;
-  private int maxChars = -1;  // the shakespeare corpus is roughly 6 million chars according to wc -c
-  private char[] validChars = null;
-  private int numCharacters = 0;
   private Random rand = new Random(718);
-  private Map<Character,Integer> charToIdxMap = null;
+
+  public LuceneReaderCharacterIterator(){
+    
+  }
   
   public LuceneReaderCharacterIterator(String indexDir){
+    init(indexDir);
+  }
+
+  public void init(String indexDir){
     Directory dir;
     this.maxChars = MINI_BATCH_SIZE * 500;
-    this.validChars = getMimicCharacterSet();
+    this.validChars = getCharacterSet();
     this.numCharacters = validChars.length;
     //Store valid characters is a map for later use in vectorization
     charToIdxMap = new HashMap<>();
@@ -52,33 +53,9 @@ public class LuceneReaderCharacterIterator implements DataSetIterator {
       ireader = DirectoryReader.open(dir);
     } catch (IOException e) {
       throw new RuntimeException(e);
-    }
+    }    
   }
-  @Override
-  public boolean hasNext() {
-    return (charNum + MINI_BATCH_SIZE) < maxChars;
-  }
-
-  @Override
-  public DataSet next() {
-    return next(MINI_BATCH_SIZE);
-  }
-
-  @Override
-  public int batch() {
-    return MINI_BATCH_SIZE; // copied from RNN example
-  }
-
-  @Override
-  public int cursor() {
-    return charNum;
-  }
-
-  @Override
-  public int inputColumns() {
-    return this.validChars.length;
-  }
-
+  
   @Override
   public DataSet next(int size) {
     Document doc = null;
@@ -126,43 +103,7 @@ public class LuceneReaderCharacterIterator implements DataSetIterator {
   }
 
   @Override
-  public int numExamples() {
-    return charNum;
-  }
-
-  @Override
-  public void reset() {
-    charNum = 0;
-  }
-
-  @Override
-  public void setPreProcessor(DataSetPreProcessor arg0) {
-    throw new UnsupportedOperationException("Not implemented");
-  }
-
-  @Override
-  public int totalExamples() {
-    return maxChars;
-  }
-
-  @Override
-  public int totalOutcomes() {
-    return this.validChars.length;
-  }
-
-  public int getCharIndex(char c){
-    return charToIdxMap.get(c);
-  }
-  
-  public char getIndexChar(int i){
-    return validChars[i];
-  }
-  
-  public char getRandomCharacter(){
-    return validChars[(int) (rand.nextDouble()*validChars.length)];
-  }
-
-  public static char[] getMimicCharacterSet(){
+  public char[] getCharacterSet(){
     List<Character> validChars = new LinkedList<>();
     for(char c : CharacterIterator.getDefaultCharacterSet() ) validChars.add(c);
     char[] additionalChars = {'=', '~'};

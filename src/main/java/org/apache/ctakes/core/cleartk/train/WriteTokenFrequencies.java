@@ -33,7 +33,7 @@ public class WriteTokenFrequencies {
   
   public static void main(String[] args) throws UIMAException, IOException {
     Options options = CliFactory.parseArguments(Options.class, args);
-    List<File> items = SentenceDetectorEvaluation.getItems(options.getAnaforaDirectory());
+    List<File> items = SentenceDetectorEvaluation.getAnaforaItems(options.getAnaforaDirectory());
 
     CollectionReader collectionReader = UriCollectionReader.getCollectionReaderFromFiles(items);
     AggregateBuilder aggregateBuilder = new AggregateBuilder();
